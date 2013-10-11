@@ -1,141 +1,122 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "stego.h"
 
-#define BUFFER_SIZE 100
+unsigned int lineLengthCache[MAX_REAL_LINES];
+char *lineCache[MAX_REAL_LINES - 1];
+unsigned int currLineSize[MAX_REAL_LINES - 1];
 
-// Reading flags
-int isReadingComment = FALSE;
-int isSkippingWhitespace = FALSE;
-int isReadingMagicNumber = FALSE;
-int isReadingPixelWidth = FALSE;
-int isReadingPixelHeight = FALSE;
+char *fileFormat;
+unsigned int fileWidth = 0, fileHeight = 0, fileColorDepth = 0; 
 
-int skipWhitespace(char *buffer, int bufferSize, FILE *filePointer, int index) {
-	if (index < 0) return -1;
-	while (TRUE) {
-		// Check out boundary condition
-		if (index >= bufferSize) {
-			if (fgets(buffer, bufferSize, filePointer) == NULL) {
-				return -1;
-			}
-			index = 0;
-		}
-		// Skip dat whitespace
-		if (buffer[index] == SPACE_CHAR_ID || buffer[index] == NEWLINE_CHAR_ID || buffer[index] == TAB_CHAR_ID) {
-			index++;		
-		} else {
-			// Dis ain't no whiespace
-			return index;
-		}
+void doLineRead(FILE *filePointer) {
+	unsigned int index = 0, i = 0;
+	int c;
+	unsigned int inComment = FALSE;
+	// Zero the lineLengthCache
+	for (i = 0; i < MAX_REAL_LINES; i++) {
+		lineLengthCache[i] = 0;
 	}
-	return -1;
-}
-
-int skipComment(char *buffer, int bufferSize, FILE *filePointer, int index) {
-	if (index < 0) return -1;
-	while (TRUE) {
-		// Check out boundary condition
-		if (index >= bufferSize) {
-			if (fgets(buffer, bufferSize, filePointer) == NULL) {
-				return -1;
-			}
-			index = 0;
-		}
-		// Continue until the next line
-		if (buffer[index] == NEWLINE_CHAR_ID) {
-			return ++index;		
-		} else {
-			// We still in dat young comment
-			index++;
-		}
-	}
-	return -1;
-}
-
-int advance(char *buffer, int bufferSize, FILE *filePointer, int index) {
-	if (index < 0) return -1;
-	while (TRUE) {
-		// Check out boundary condition
-		if (index >= bufferSize) {
-			if (fgets(buffer, bufferSize, filePointer) == NULL) {
-				return -1;
-			}
-			index = 0;
-		} else if (index < 0) {
-			return -1;
-		}
-		// Skip dat whitespace
-		if (buffer[index] == HASH_CHAR_ID || (buffer[index] == SPACE_CHAR_ID || buffer[index] == NEWLINE_CHAR_ID || buffer[index] == TAB_CHAR_ID)) {
-			if (buffer[index] == HASH_CHAR_ID) {
-				index = skipComment(buffer, bufferSize, filePointer, index);
+	// Go back to the beginning of the file
+	rewind(filePointer);
+	// Do the line analysis
+	printf("Doing line read...\n");
+	do {
+		c = fgetc(filePointer);
+		if (c == HASH_CHAR_ID) {
+			printf("\tEntered comment.\n");
+			inComment = TRUE;
+		} else if (c == NEWLINE_CHAR_ID || c == EOF) {
+			if (inComment) {
+				printf("\tExited comment.\n");
+				inComment = FALSE;
 			} else {
-				index = skipWhitespace(buffer, bufferSize, filePointer, index);
+				printf("\tLine #%u of length %u identified.\n", index + 1, lineLengthCache[index]);
+				index++;
 			}
 		} else {
-			// We're in the clear
-			return index;
+			if (!inComment) {
+				lineLengthCache[index]++;
+			}
 		}
-	}
-	return -1;
+	} while (c != EOF && index < MAX_REAL_LINES);
+	printf("Line read complete...\n");
 }
 
-int readMagicNumber(char *buffer, int bufferSize, FILE *filePointer, int index) {
-	int start = index;
-	if (index < 0) return -1;
-	while (TRUE) {
-		// Check out boundary condition
-		if (index >= bufferSize) {
-			if (fgets(buffer, bufferSize, filePointer) == NULL) {
-				return -1;
+void doStringRead(FILE *filePointer) {
+	unsigned int index = 0, i = 0;
+	char c;
+	unsigned int inComment = FALSE;
+	// Do the string allocation
+	for (i = 0; i < MAX_REAL_LINES - 1; i++) {
+		lineCache[i] = (char *) malloc(sizeof(char) * (lineLengthCache[i] + 1));	
+		currLineSize[i] = 0;
+	}
+	// Go back to the beginning of the file
+	rewind(filePointer);
+	// Do the line analysis
+	printf("Doing string read...\n");
+	while (index < MAX_REAL_LINES - 1) {
+		c = fgetc(filePointer);
+
+		if (c == HASH_CHAR_ID) {
+			printf("\tEntered comment.\n");
+			inComment = TRUE;
+		} else if (c == NEWLINE_CHAR_ID || c == EOF) {
+			if (inComment) {
+				printf("\tExited comment.\n");
+				inComment = FALSE;
+			} else {
+				// Capping off the string
+				lineCache[index][currLineSize[index]] = 0;
+				// Printing the string
+				printf("\tLine #%u read in as string \"%s\".\n", index + 1, lineCache[index]);
+				index++;
 			}
-			index = 0;
-		}
-		// Continue until the next line
-		if (buffer[index] == NEWLINE_CHAR_ID) {
-			// We reached the end of the magic number
-			return ++index;		
 		} else {
-			// We still in dat young comment
-			return index++;
+			if (!inComment) {
+				lineCache[index][(currLineSize[index])++] = c;
+			}
 		}
 	}
-	return -1;
+	printf("String read complete...\n");
 }
 
-int readPixelWidth(char *buffer, int bufferSize, FILE *filePointer, int index) {
-	// TODO
-	int start = index;
-	if (index < 0) return -1;
-	while (TRUE) {
-		// Check out boundary condition
-		if (index >= bufferSize) {
-			if (fgets(buffer, bufferSize, filePointer) == NULL) {
-				return -1;
-			}
-			index = 0;
-		}
-		// Continue until the next line
-		if (buffer[index] == NEWLINE_CHAR_ID) {
-			// We reached the end of the magic number
-			return ++index;		
-		} else {
-			// We still in dat young comment
-			return index++;
+void doAnalysis(FILE *filePointer) {
+	unsigned int i = 0;
+	// Do the string allocation
+	for (i = 0; i < MAX_REAL_LINES - 1; i++) {
+		switch (i) {
+		case 0:
+			fileFormat = lineCache[i];
+			break;		
+		case 1:
+			sscanf(lineCache[i], "%u %u", &fileWidth, &fileHeight);
+			break;
+		case 2:
+			sscanf(lineCache[i], "%u", &fileColorDepth);
+			break;
 		}
 	}
-	return -1;
+	// Report the results
+	printf("Doing analysis...\n\tFile Format: %s\n\tWidth in Pixels: %upx\n\tHeight in Pixels: %upx\n\tColor Depth: %u\nAnalysis complete...\n", fileFormat, fileWidth, fileHeight, fileColorDepth);
+	// Do error checks
+	if (strcmp(fileFormat, STANDARD_FILE_FORMAT) != 0) {
+		// This isn't the right format
+		printf("The file format was \"%s\", which is currently unsupported. Please use \"P6\" formatted files.\n");
+		exit(2);
+	}
 }
+
 
 int main(int argc, char **argv) {
 	char *fileName; // Name of the file
-	char buffer[BUFFER_SIZE]; // The buffer for reading the file
 	FILE *filePointer; // Pointer to the file specified by fileName
-	int index;
-
 	// First assert that there is exactly one parameter
 	if (argc != 2) {
-		printf("ReadMsg requires exactly one paramter: the name of the file containing the message.");
+		printf("ReadMsg requires exactly one paramter: the name of the file containing the message.\n");
 		return 1;
 	}
 	// Ok, we good - lets read the file name
@@ -143,15 +124,9 @@ int main(int argc, char **argv) {
 	// Cool, lets turn that into an actual file pointer or something
 	filePointer = fopen(fileName, "r");
 	// Now we read :D
-	index = 0;
-	skipWhitespace(buffer, BUFFER_SIZE, filePointer, index);
-	while(fgets(buffer, BUFFER_SIZE, filePointer) != NULL) {
-		
-		// Get a line, up to 100 chars from filePointer - done if NULL
-		sscanf(buffer, "%ld", &elapsed_seconds);
-		// Convert the string to a long int
-		printf ("%ld\n", elapsed_seconds);
-	}
+	doLineRead(filePointer);
+	doStringRead(filePointer);
+	doAnalysis(filePointer);
 	// Kill file pointer
 	fclose(filePointer);
 	return 0;

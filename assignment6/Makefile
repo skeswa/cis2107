@@ -1,0 +1,22 @@
+CC=gcc
+CFLAGS=-g -Wall -Werror
+
+all: clean ReadMsg WriteMsg
+
+ReadMsg: stego.o ReadMsg.o
+	$(CC) $(CFLAGS) -o ReadMsg stego.o ReadMsg.o
+
+WriteMsg: stego.o WriteMsg.o
+	$(CC) $(CFLAGS) -o WriteMsg stego.o WriteMsg.o
+
+ReadMsg.o: ReadMsg.c
+	$(CC) $(CFLAGS) -c ReadMsg.c
+
+WriteMsg.o: ReadMsg.c
+	$(CC) $(CFLAGS) -c WriteMsg.c
+
+stego.o: stego.h stego.c
+	$(CC) $(CFLAGS) -c stego.c
+
+clean:
+	rm -f *.o ReadMsg WriteMsg
