@@ -86,6 +86,9 @@ void doStringRead(FILE *filePointer) {
 
 void doAnalysis(FILE *filePointer) {
 	unsigned int i = 0;
+	unsigned char mask = 1, c;
+	unsigned char messageLength = 0;
+	char *message;
 	// Do the string allocation
 	for (i = 0; i < MAX_REAL_LINES - 1; i++) {
 		switch (i) {
@@ -101,13 +104,33 @@ void doAnalysis(FILE *filePointer) {
 		}
 	}
 	// Report the results
-	printf("Doing analysis...\n\tFile Format: %s\n\tWidth in Pixels: %upx\n\tHeight in Pixels: %upx\n\tColor Depth: %u\nAnalysis complete...\n", fileFormat, fileWidth, fileHeight, fileColorDepth);
+	printf("Doing analysis...\n\tFile Format: %s\n\tWidth in Pixels: %upx\n\tHeight in Pixels: %upx\n\tColor Depth: %u\n", fileFormat, fileWidth, fileHeight, fileColorDepth);
 	// Do error checks
 	if (strcmp(fileFormat, STANDARD_FILE_FORMAT) != 0) {
 		// This isn't the right format
-		printf("The file format was \"%s\", which is currently unsupported. Please use \"P6\" formatted files.\n");
+		printf("The file format was \"%s\", which is currently unsupported. Please use \"P6\" formatted files.\n", fileFormat);
 		exit(2);
 	}
+	// Now we do the payload analysis
+	// Time to read the length
+	for (i = 0; i < 8; i++) {
+		if (i > 0) messageLength <<= 1;
+		messageLength += (c = (unsigned char) fgetc(filePointer)) & mask;
+	}
+	printf("\tMessage Length: %u bytes\n", messageLength);
+	// TODO error check
+	// Allocate the message
+	message = (char *) malloc(messageLength + 1);
+	// Lets read in the next {messageLength} bytes
+	for (i = 0; i < messageLength * 8; i++) {
+		c = fgetc(filePointer);
+		if (i % 8 == 0) message[i / 8] = 0;
+		message[i / 8] += c & mask;
+		message[i / 8] <<= 1;
+	}
+	message[messageLength] = 0;
+	// Print message
+	printf("\tMessage: %s\nAnalysis Complete.\n", message);
 }
 
 
