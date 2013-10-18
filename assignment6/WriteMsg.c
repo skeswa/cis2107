@@ -1,4 +1,169 @@
-#include<stdio.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-int main(void) {
+#include "stego.h"
+
+unsigned int lineLengthCache[MAX_REAL_LINES];
+char *lineCache[MAX_REAL_LINES - 1];
+unsigned int currLineSize[MAX_REAL_LINES - 1];
+
+char *fileFormat;
+unsigned int fileWidth = 0, fileHeight = 0, fileColorDepth = 0; 
+
+void doLineRead(FILE *filePointer) {
+	unsigned int index = 0, i = 0;
+	int c;
+	unsigned int inComment = FALSE;
+	// Zero the lineLengthCache
+	for (i = 0; i < MAX_REAL_LINES; i++) {
+		lineLengthCache[i] = 0;
+	}
+	// Go back to the beginning of the file
+	rewind(filePointer);
+	// Do the line analysis
+	printf("Doing line read...\n");
+	do {
+		c = fgetc(filePointer);
+		if (c == HASH_CHAR_ID) {
+			printf("\tEntered comment.\n");
+			inComment = TRUE;
+		} else if (c == NEWLINE_CHAR_ID || c == EOF) {
+			if (inComment) {
+				printf("\tExited comment.\n");
+				inComment = FALSE;
+			} else {
+				printf("\tLine #%u of length %u identified.\n", index + 1, lineLengthCache[index]);
+				index++;
+			}
+		} else {
+			if (!inComment) {
+				lineLengthCache[index]++;
+			}
+		}
+	} while (c != EOF && index < MAX_REAL_LINES);
+	printf("Line read complete...\n");
+}
+
+void doStringRead(FILE *filePointer) {
+	unsigned int index = 0, i = 0;
+	char c;
+	unsigned int inComment = FALSE;
+	// Do the string allocation
+	for (i = 0; i < MAX_REAL_LINES - 1; i++) {
+		lineCache[i] = (char *) malloc(sizeof(char) * (lineLengthCache[i] + 1));	
+		currLineSize[i] = 0;
+	}
+	// Go back to the beginning of the file
+	rewind(filePointer);
+	// Do the line analysis
+	printf("Doing string read...\n");
+	while (index < MAX_REAL_LINES - 1) {
+		c = fgetc(filePointer);
+
+		if (c == HASH_CHAR_ID) {
+			printf("\tEntered comment.\n");
+			inComment = TRUE;
+		} else if (c == NEWLINE_CHAR_ID || c == EOF) {
+			if (inComment) {
+				printf("\tExited comment.\n");
+				inComment = FALSE;
+			} else {
+				// Capping off the string
+				lineCache[index][currLineSize[index]] = 0;
+				// Printing the string
+				printf("\tLine #%u read in as string \"%s\".\n", index + 1, lineCache[index]);
+				index++;
+			}
+		} else {
+			if (!inComment) {
+				lineCache[index][(currLineSize[index])++] = c;
+			}
+		}
+	}
+	printf("String read complete...\n");
+}
+
+void doAnalysis(FILE *filePointer) {
+	unsigned int i = 0;
+	unsigned char mask = 1, c;
+	unsigned char messageLength = 0;
+	char *message;
+	// Do the string allocation
+	for (i = 0; i < MAX_REAL_LINES - 1; i++) {
+		switch (i) {
+		case 0:
+			fileFormat = lineCache[i];
+			break;		
+		case 1:
+			sscanf(lineCache[i], "%u %u", &fileWidth, &fileHeight);
+			break;
+		case 2:
+			sscanf(lineCache[i], "%u", &fileColorDepth);
+			break;
+		}
+	}
+	// Report the results
+	printf("Doing analysis...\n\tFile Format: %s\n\tWidth in Pixels: %upx\n\tHeight in Pixels: %upx\n\tColor Depth: %u\n", fileFormat, fileWidth, fileHeight, fileColorDepth);
+	// Do error checks
+	if (strcmp(fileFormat, STANDARD_FILE_FORMAT) != 0) {
+		// This isn't the right format
+		printf("The file format was \"%s\", which is currently unsupported. Please use \"P6\" formatted files.\n", fileFormat);
+		exit(2);
+	}
+	// Now we do the payload analysis
+	// Time to read the length
+	for (i = 0; i < 8; i++) {
+		if (i > 0) messageLength <<= 1;
+		messageLength += (c = (unsigned char) fgetc(filePointer)) & mask;
+	}
+	printf("\tMessage Length: %u bytes\n", messageLength);
+	// Do error check
+	if (messageLength * 8 + 8 > fileWidth * fileHeight) {
+		// message is impossibly long
+		printf("The message is longer than the image is - thats a problem.\n");
+		exit(2);
+	}
+	// Allocate the message
+	message = (char *) malloc(messageLength + 1);
+	// Lets read in the next {messageLength} bytes
+	for (i = 0; i < messageLength * 8; i++) {
+		c = fgetc(filePointer);
+		if (i % 8 == 0) {
+			message[i / 8] = 0;
+		} else {
+			message[i / 8] <<= 1;
+		}
+		message[i / 8] += c & mask;
+	}
+	message[messageLength] = 0;
+	// Print message
+	printf("\tMessage: %s\nAnalysis Complete.\n", message);
+}
+
+
+int main(int argc, char **argv) {
+	char *secretMessage; // Name of the input file
+	char *inputFileName; // Name of the input file
+	char *outputFileName; // Name of the output file
+	FILE *inputFilePointer, *outputFilePointer; // Pointer to the file specified by fileName
+	// First assert that there is exactly one parameter
+	if (argc != 4) {
+		printf("WriteMsg requires exactly three parameters: A secret message, the name of an image file, he name to give the output file.\n");
+		return 1;
+	}
+	// Ok, we good - lets read the file name
+	secretMessage = argv[1];
+	inputFileName = argv[2];
+	outputFileName = argv[3];
+	// Cool, lets turn that into an actual file pointer or something
+	inputFilePointer = fopen(inputFileName, "r");
+	outputFilePointer = fopen(outputFileName, "rw");
+	// Now we read :D
+	doLineRead(filePointer);
+	doStringRead(filePointer);
+	doAnalysis(filePointer);
+	// Kill file pointer
+	fclose(filePointer);
+	return 0;
 }

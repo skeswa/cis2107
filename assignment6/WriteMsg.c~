@@ -143,17 +143,22 @@ void doAnalysis(FILE *filePointer) {
 
 
 int main(int argc, char **argv) {
-	char *fileName; // Name of the file
-	FILE *filePointer; // Pointer to the file specified by fileName
+	char *secretMessage; // Name of the input file
+	char *inputFileName; // Name of the input file
+	char *outputFileName; // Name of the output file
+	FILE *inputFilePointer, *outputFilePointer; // Pointer to the file specified by fileName
 	// First assert that there is exactly one parameter
-	if (argc != 2) {
-		printf("ReadMsg requires exactly one parameter: the name of the file containing the message.\n");
+	if (argc != 4) {
+		printf("WriteMsg requires exactly three parameters: A secret message, the name of an image file, he name to give the output file.\n");
 		return 1;
 	}
 	// Ok, we good - lets read the file name
-	fileName = argv[1];
+	secretMessage = argv[1];
+	inputFileName = argv[2];
+	outputFileName = argv[3];
 	// Cool, lets turn that into an actual file pointer or something
-	filePointer = fopen(fileName, "r");
+	inputFilePointer = fopen(inputFileName, "r");
+	outputFilePointer = fopen(outputFileName, "r");
 	// Now we read :D
 	doLineRead(filePointer);
 	doStringRead(filePointer);
